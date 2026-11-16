@@ -617,7 +617,7 @@ function applyHit(a,d,h,m,pr){
   if(!pr){a.mvConnect=true;a.mvConnectHit=true;a.mvBlocked=false;if(atWall&&a.y>=GROUND&&!m.vel&&!h.pin)a.kb=-dir*2.2;}
   if(d.comboTaken>=COMBO_MAX||d.juggle>=JUG_MAX){d.limit=true;fx('txt',d.x,d.y-100,{s:'COMBO LIMIT',c:'#80c0ff',life:50});}
   addGauge(a.team,dmg*0.14);addGauge(T_,dmg*0.08);
-  hitFX(px,py,h.heavy,dir,m.col||a.ch.fxc,!!h.launch);sfx(h.heavy?'heavy':'hit');HITSTOP=h.heavy?8:5;if(h.heavy)SHAKE=6;
+  FXS=styleOf(a);hitFX(px,py,h.heavy,dir,m.col||a.ch.fxc,!!h.launch);sfx(h.heavy?'heavy':'hit');HITSTOP=h.heavy?8:5;if(h.heavy)SHAKE=6;
   if(d.hp<=0){d.hp=0;d.dead=true;d.limit=false;d.st='air';d.vx=dir*2.6;d.vy=-6.2;d.jg=GRAV;if(d.y>=GROUND)d.y=GROUND-1;
     G.state='ko';G.t=0;G.slow=45;HITSTOP=14;SHAKE=12;sfx('ko');koFX(d.x,d.y-45,m.col||a.ch.fxc);}
   return 2;
@@ -910,7 +910,7 @@ function getPose(f){
   return P.idle;
 }
 function drawFighter(f){
-  const m=f.st==='atk'?f.mv:null;
+  const m=f.st==='atk'?f.mv:null;FXS=styleOf(f);
   if(m&&m.hide&&f.f>=m.hide[0]&&f.f<=m.hide[1])return;
   let dir=f.face;if(m&&m.spin&&f.f>=m.spin[0]&&f.f<=m.spin[1]&&((f.f>>2)&1))dir=-dir;
   rect(f.x-10,GROUND+1,20,2,'rgba(0,0,0,0.35)');
@@ -1038,9 +1038,12 @@ const STYLES=[
  {n:'終極華麗',star:5,d:'特寫切入、殘影、粒子、閃光全開'}
 ];
 const WORDS=['轟!','砰!','喝!','破!','碎!'];
-let FXS=5,PT=[],GH=[],FLASH=0,GLITCH=0;
-try{const v=parseInt(localStorage.getItem('stick3on3_fx'),10);if(v>=0&&v<STYLES.length)FXS=v;}catch(e){}
-function saveFXS(){try{localStorage.setItem('stick3on3_fx',String(FXS));}catch(e){}}
+// 每個角色各自的特效風格（索引對應 STYLES），可在「特效風格展示」逐一更改
+const DEF_CHFX={REI:2,RAN:3,GOU:2,TSUBAME:1,KAGE:1,RAI:4,RIN:3,TORA:2,LONG:1,TETSU:0,LUNA:4,EN:3,KIBA:4,YUU:3,ZERO:5};
+let CHFX=Object.assign({},DEF_CHFX),FXS=0,PT=[],GH=[],FLASH=0,GLITCH=0;
+try{const v=JSON.parse(localStorage.getItem('stick3on3_chfx')||'null');if(v)for(const k in DEF_CHFX)if(Number.isInteger(v[k])&&v[k]>=0&&v[k]<STYLES.length)CHFX[k]=v[k];}catch(e){}
+function saveFXS(){try{localStorage.setItem('stick3on3_chfx',JSON.stringify(CHFX));}catch(e){}}
+const styleOf=f=>CHFX[f.ch.e]||0;
 function part(x,y,vx,vy,life,c,sz,g,ln){if(PT.length<400)PT.push({x,y,vx,vy,life,t:0,c,sz:sz||1,g:g||0,ln});}
 const MONO=new Map();
 function monoCh(ch,c){const k=ch.e+ch.n+c;let m=MONO.get(k);if(!m){m=Object.assign({},ch,{c:c,c2:c,c3:c,dk:c,dk2:c,dk3:c,ol:c,eye:c,cape:0,acc:'none'});MONO.set(k,m);}return m;}
@@ -1069,7 +1072,7 @@ function koFX(x,y,col){
   if(s===5){for(let i=0;i<3;i++)fx('ring',x,y,{c:i?col:'#ffffff',life:14+i*5,sp:5-i,w:2});fx('slash',x,y,{dx:1,dy:-0.5,len:90,c:'#ffffff',w:4,life:12});fx('slash',x,y,{dx:1,dy:0.5,len:90,c:col,w:3,life:14});}
 }
 function trailFX(f){
-  if(f.st!=='atk')return;const m=f.mv,s=FXS,t=f.f;
+  if(f.st!=='atk')return;const m=f.mv,s=styleOf(f),t=f.f;
   if(!s||!(m.sp||m.sup))return;if(m.hide&&t>=m.hide[0]&&t<=m.hide[1])return;
   const col=m.col||f.ch.fxc;
   if(s===1){if(t%3===0)ghost(f,'#101014',10,0.3);if(t%2===0)part(f.x+ri(16)-8,f.y-20-ri(50),0,0.3,16,'#101014',1+ri(2),0.05);}
@@ -1079,7 +1082,7 @@ function trailFX(f){
   else if(s===5){if(t%2===0)ghost(f,col,9,0.4);part(f.x+ri(20)-10,f.y-ri(70),(Math.random()-0.5)*2,-1-Math.random(),16,'#ffffff',1,0);if(m.sup)part(f.x+ri(24)-12,f.y-ri(80),0,-2,10,col,2,0);}
 }
 function projFX(p){
-  const s=FXS;if(!s)return;
+  const s=styleOf(p.own);if(!s)return;
   if(s===1){if(p.t%2===0)part(p.x,p.y+ri(8)-4,0,0.4,12,'#101014',2,0.04);}
   else if(s===2){part(p.x,p.y+ri(10)-5,-p.vx*1.5,0,5,'#ffffff',1,0,1);}
   else if(s===4){if(p.t%3===0)fx('ring',p.x,p.y,{c:(p.t/3)&1?'#40f0ff':'#ff40c0',life:6,sp:1.5,r0:3});}
@@ -1093,7 +1096,7 @@ function updParts(){
 function drawGhosts(){for(const g of GH){ctx.globalAlpha=g.al*(1-g.t/g.life);drawBody(g.ch,g.p,g.x,g.y,g.dir,g.sc);}ctx.globalAlpha=1;}
 function drawParts(){for(const p of PT){if(p.ln)line(p.x,p.y,p.x-p.vx*2,p.y-p.vy*2,1,p.c);else{const z=p.t>p.life*0.6?1:p.sz;rect(p.x,p.y,z,z,p.c);}}}
 function superDim(a,b){
-  if(![a,b].some(f=>f.st==='atk'&&f.mv.sup))return;const s=FXS;
+  const sf=[a,b].find(f=>f.st==='atk'&&f.mv.sup);if(!sf)return;const s=styleOf(sf);
   if(s===1)rect(0,0,W,H,'rgba(232,224,208,0.55)');
   else if(s===2){for(let i=0;i<11;i++)rect(mod(i*71-FR*14,W+40)-40,8+i*17,34,1,'rgba(255,255,255,0.55)');}
   else if(s===3)rect(0,0,W,H,'rgba(0,0,0,0.3)');
@@ -1101,7 +1104,7 @@ function superDim(a,b){
   else if(s===5)rect(0,0,W,H,'rgba(0,0,20,0.48)');
 }
 function drawFreeze(){
-  const F=FREEZE,f=F.f,k=1-F.t/F.max,cx=f.x,cy=f.y-50,s=FXS,col=F.col||'#ffe040';
+  const F=FREEZE,f=F.f,k=1-F.t/F.max,cx=f.x,cy=f.y-50,s=styleOf(f),col=F.col||'#ffe040';
   const sx=OX,sy=OY;
   if(s===1){OX=0;OY=0;rect(0,0,W,H,'rgba(236,228,210,0.9)');OX=sx;OY=sy;
     const r=18+k*30;ringPx(cx,cy,r,'#101014',3);ringPx(cx,cy,r+3,'#101014',2);for(let i=0;i<10;i++){const a=i*0.63+1;circ(cx+Math.cos(a)*(r+8+i%3*4),cy+Math.sin(a)*(r+8+i%3*4),1+i%3,'#101014');}
@@ -1119,7 +1122,7 @@ function drawFreeze(){
   if(s===5){for(let i=0;i<3;i++)ringPx(cx,cy,(k*120+i*30)%130,i?col:'#ffffff',1);}
 }
 function drawCutIn(){
-  const F=FREEZE,f=F.f,k=1-F.t/F.max,s=FXS,col=F.col||'#ffe040';
+  const F=FREEZE,f=F.f,k=1-F.t/F.max,s=styleOf(f),col=F.col||'#ffe040';
   if(s===5){const y0=F.lead?52:64,hh=F.lead?66:48,sl=Math.min(1,k*5),side=f.team.side,px=side?W-70-(1-sl)*120:70+(1-sl)*-120+0;
     ctx.save();ctx.beginPath();ctx.rect(0,y0,W,hh);ctx.clip();
     rect(0,y0,W,hh,'rgba(0,0,0,0.78)');for(let i=0;i<14;i++)rect(mod(i*53+(side?FR:-FR)*16,W+60)-60,y0+3+i*((hh-6)/14),50,1,i%3?col:'#ffffff');
@@ -1159,7 +1162,8 @@ function openDemo(ci){
 }
 function tickDemo(){
   for(const e of uiq){
-    if(e.a==='l'||e.a==='r'){FXS=(FXS+(e.a==='r'?1:STYLES.length-1))%STYLES.length;saveFXS();sfx('ui');}
+    if(e.a==='l'||e.a==='r'){const k=CH[DEMO.ci].e;CHFX[k]=(CHFX[k]+(e.a==='r'?1:STYLES.length-1))%STYLES.length;saveFXS();sfx('ui');}
+    if(e.a==='t1'){CHFX=Object.assign({},DEF_CHFX);saveFXS();sfx('ok');}
     if(e.a==='u'||e.a==='d'){sfx('ui');openDemo(DEMO.ci+(e.a==='d'?1:-1));return;}
     if(e.a==='hp'){DEMO.bg=(DEMO.bg+1)%NMAP;openDemo(DEMO.ci);return;}
     if(e.a==='lp'||e.a==='esc'||e.a==='lk'){sfx('ok');toTitle();return;}
@@ -1169,22 +1173,22 @@ function tickDemo(){
   simFrame();
 }
 function renderDemo(){
-  renderFight();const st=STYLES[FXS],A=G.teams[0].ai;
-  if(FREEZE&&FXS===5)return;
+  renderFight();const ch=CH[DEMO.ci],si=CHFX[ch.e],st=STYLES[si],A=G.teams[0].ai;
+  if(FREEZE&&si===5)return;
   rect(58,44,204,34,'rgba(0,0,16,0.78)');rect(58,44,204,1,'#ffe040');rect(58,77,204,1,'#ffe040');
-  textO('◀　風格 '+(FXS+1)+'／'+STYLES.length+'　'+st.n+'　▶',160,46,'#ffffff',10,'center');
+  textO(ch.n+' '+ch.e+' 的風格　◀ '+st.n+' ▶',160,46,'#ffffff',10,'center');
   textO('華麗度 '+'★'.repeat(st.star)+'☆'.repeat(5-st.star),160,58,'#ffd040',7,'center');
   text(st.d,160,68,'#c0d0ff',6,'center');
   if(A&&A.cur)textO('示範：'+A.cur,160,84,'#60ff80',7,'center');
-  rect(40,180,240,12,'rgba(0,0,16,0.7)');
-  text('左右 切換風格　上下 換角色　'+kn(0,'hp')+' 換場景　'+kn(0,'lp')+'／Enter 套用並返回',160,183,'#c0d0ff',6.5,'center');
+  rect(20,180,280,12,'rgba(0,0,16,0.7)');
+  text('左右 改此角色風格　上下 換角色　'+kn(0,'hp')+' 換場景　'+kn(0,'t1')+' 全部還原　'+kn(0,'lp')+'／Enter 儲存返回',160,183,'#c0d0ff',6,'center');
 }
 
 /* ======================================================================
    畫面：標題／說明／選角／結果
    ====================================================================== */
 let MENU=0,SEL=null,ARC=null,RES=null,LAST=null,TT=0;
-const MENUS=['街機模式（挑戰電腦）','雙人對戰','自由對戰（對電腦）','場景鑑賞（地圖與音樂）','特效風格展示','按鍵設定','操作說明'];
+const MENUS=['街機模式（挑戰電腦）','雙人對戰','自由對戰（對電腦）','場景鑑賞（地圖與音樂）','角色特效風格（展示與設定）','按鍵設定','操作說明'];
 let STG={i:0,mode:'gallery',t:0};
 function toTitle(){SCR='title';G=null;PAUSE=false;TT=0;musicPlay(0);}
 function uiConfirm(e){return e.a==='lp';}
@@ -1362,7 +1366,7 @@ function renderSelect(){
   });
   // 招式資訊（1P 游標所在角色）
   {const s=SEL.p[0],hv=s.picks.length<3?s.cur:s.picks[s.ld];if(unlocked(hv)){const ch=CH[hv];
-    text('體力 '+ch.hp+'　速度 '+Math.round(ch.spd*10)+'　攻擊 '+Math.round(ch.pow*100)+'%',160,120,'#a0b0d0',6,'center');
+    text('體力 '+ch.hp+'　速度 '+Math.round(ch.spd*10)+'　攻擊 '+Math.round(ch.pow*100)+'%　特效 '+STYLES[CHFX[ch.e]].n,160,120,'#a0b0d0',6,'center');
     const ml=moveLines(ch);text(ml[0]+'　'+ml[1]+'　'+ml[2],160,178,'#c0d0ff',6,'center');text(ml[3]+'　'+ml[4],160,188,'#ffd040',6,'center');}}
   text(SEL.mode==='vs'?'1P：'+kn(0,'lp')+' 確認／'+kn(0,'lk')+' 取消　　2P：'+kn(1,'lp')+' 確認／'+kn(1,'lk')+' 取消　　Esc 回標題':'方向移動　'+kn(0,'lp')+'／Enter 確認　'+kn(0,'lk')+' 取消　Esc 回標題',160,212,'#8898c0',6,'center');
   if(SEL.go)textO('READY!',160,96,'#ffe040',30,'center',FONT2);
@@ -1405,7 +1409,7 @@ function focusGame(){initAudio();try{if(AC&&AC.state==='suspended')AC.resume();}
 cover.addEventListener('click',focusGame);cv.addEventListener('click',focusGame);
 window.addEventListener('keydown',()=>{if(cover.style.display!=='none')focusGame();},{once:true});
 if(typeof window.__TEST__==='undefined'){requestAnimationFrame(loop);setInterval(musicTick,30);}
-else window.__API__={tick,render,startMatch,CH,BOSSF,KB,get G(){return G;},get SCR(){return SCR;},set SCR(v){SCR=v;},uiq,get FR(){return FR;},get PROJ(){return PROJ;},get FREEZE(){return FREEZE;},get STG(){return STG;},openDemo,STYLES,get FXS(){return FXS;},set FXS(v){FXS=v;},get BIND(){return BIND;},setBind,openKeys,get KEYMAP(){return KEYMAP;},openStage,NMAP,TRACKS,schedStep,cur,changeOK};
+else window.__API__={tick,render,startMatch,CH,BOSSF,KB,get G(){return G;},get SCR(){return SCR;},set SCR(v){SCR=v;},uiq,get FR(){return FR;},get PROJ(){return PROJ;},get FREEZE(){return FREEZE;},get STG(){return STG;},openDemo,STYLES,get CHFX(){return CHFX;},get BIND(){return BIND;},setBind,openKeys,get KEYMAP(){return KEYMAP;},openStage,NMAP,TRACKS,schedStep,cur,changeOK};
 </script>
 </body>
 </html>
