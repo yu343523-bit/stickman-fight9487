@@ -262,6 +262,7 @@ const NORM={
   jlk:N({st:4,ac:9,rc:4,dmg:32,hs:14,bs:10,box:[2,-34,32,26],lvl:1,p:'jk',base:'jump',ty:'high',air:1}),
   jhk:N({st:7,ac:7,rc:6,dmg:66,hs:19,bs:13,box:[2,-36,36,30],lvl:2,p:'jhk',base:'jump',ty:'high',air:1})
 };
+for(const k in NORM)NORM[k].key=k;
 const MK={
   fireball:o=>({ty:'fireball',sp:1,total:44,kf:[[0,P.idle],[8,P.fbw],[13,P.fb],[30,P.fb],[44,P.idle]],hits:[],la:14,
     proj:{f:13,vx:o.sp||3.2,y:-50,w:14,h:14,dmg:o.dmg||70,col:o.col||'#ff8830',kind:o.kind||'ball'}}),
@@ -405,15 +406,23 @@ function renderKeys(){
   if(KC.msg)textO(KC.msg,160,201,'#60ff80',7,'center');
   text(KC.cap?'按下想使用的按鍵（Esc 取消）。若該鍵已被使用，兩個動作會互換按鍵。':kn(0,'u')+'／'+kn(0,'d')+' 選擇動作　'+kn(0,'l')+'／'+kn(0,'r')+' 切換 1P・2P　'+kn(0,'lp')+'／Enter 變更　Esc 返回',160,213,'#8898c0',6,'center');
 }
+// 難度：0 簡單（玩家輔助＋弱電腦）、1 普通、2 困難（判斷精準、積極進攻的電腦）
+const DIFFS=[{n:'簡單',c:'#60ff80',d:'簡易指令・自動防禦・連打輕拳自動連段・受到傷害減少'},
+  {n:'普通',c:'#ffe040',d:'標準手感與標準電腦'},
+  {n:'困難',c:'#ff6050',d:'電腦判斷精準、積極進攻、懂得超必殺取消'}];
+let DIFF=1;
+try{const v=parseInt(localStorage.getItem('stick3on3_diff'),10);if(v>=0&&v<=2)DIFF=v;}catch(e){}
+function saveDiff(){try{localStorage.setItem('stick3on3_diff',String(DIFF));}catch(e){}}
+function aiCfg(lv){return DIFF===0?{lvl:0.12+lv*0.5,agg:0.25,t:0}:DIFF===2?{lvl:Math.min(1,0.66+lv*0.38),agg:0.92,t:0}:{lvl:lv,agg:0.5,t:0};}
 function mkInput(){return {h:{l:0,r:0,u:0,d:0,g:0},buf:{},hist:[],cmd:null};}
 const KB=[mkInput(),mkInput()];
-let uiq=[],FR=0;
-function press(inp,b){const t=inp.buf[b];return t!==undefined&&FR-t<=7;}
+let uiq=[],FR=0,GF=0;
+function press(inp,b){const t=inp.buf[b];return t!==undefined&&GF-t<=(inp.bufN||10);}
 function motion(inp,seq,face){
   const map=k=>k==='f'?(face>0?'r':'l'):k==='b'?(face>0?'l':'r'):k;
-  let t=FR,i=inp.hist.length-1;
+  let t=GF,i=inp.hist.length-1;const gap=inp.gap||16;
   for(let s=seq.length-1;s>=0;s--){const k=map(seq[s]);let found=false;
-    for(;i>=0;i--){const e=inp.hist[i];if(t-e.t>16)return false;if(e.k===k){t=e.t;i--;found=true;break;}}
+    for(;i>=0;i--){const e=inp.hist[i];if(t-e.t>gap)return false;if(e.k===k){t=e.t;i--;found=true;break;}}
     if(!found)return false;}
   return true;
 }
@@ -430,8 +439,8 @@ function onKey(e,down){
   e.preventDefault();
   const inp=KB[m[0]],a=m[1];
   if(down){if(e.repeat)return;uiq.push({p:m[0],a});
-    if(a in inp.h){inp.h[a]=1;if(a!=='g'){inp.hist.push({k:a,t:FR});if(inp.hist.length>10)inp.hist.shift();}}
-    else inp.buf[a]=FR;}
+    if(a in inp.h){inp.h[a]=1;if(a!=='g'){inp.hist.push({k:a,t:GF});if(inp.hist.length>10)inp.hist.shift();}}
+    else inp.buf[a]=GF;}
   else if(a in inp.h)inp.h[a]=0;
 }
 window.addEventListener('keydown',e=>{if(['Space','Backspace'].includes(e.code))e.preventDefault();onKey(e,true);});
@@ -453,8 +462,9 @@ function mkFighter(ch,team){return {ch,team,x:0,y:GROUND,vx:0,vy:0,kb:0,face:1,h
 function mkTeam(side,chars,leader,inp,ai){const T_={side,cur:0,leader,gauge:0,swapUsed:false,inp,ai,combo:0,comboT:0,leaving:null,corpse:null,members:[]};
   T_.members=chars.map(c=>mkFighter(c,T_));return T_;}
 function startMatch(c0,l0,c1,l1,ai0,ai1,bgi,label){
-  const t0=mkTeam(0,c0,l0,ai0?mkInput():KB[0],ai0?{lvl:ai0,t:0}:null);
-  const t1=mkTeam(1,c1,l1,ai1?mkInput():KB[1],ai1?{lvl:ai1,t:0}:null);
+  const t0=mkTeam(0,c0,l0,ai0?mkInput():KB[0],ai0?aiCfg(ai0):null);
+  const t1=mkTeam(1,c1,l1,ai1?mkInput():KB[1],ai1?aiCfg(ai1):null);
+  for(const T_ of [t0,t1]){T_.assist=DIFF===0&&!T_.ai;T_.inp.bufN=T_.assist?14:10;T_.inp.gap=T_.assist?24:16;T_.inp.hist.length=0;T_.inp.buf={};}
   G={teams:[t0,t1],state:'intro',t:0,timer:ROUND_TIME,round:1,winner:-2,bg:getBG(bgi),bgi,label:label||'',slow:0,reason:''};
   const a=t0.members[0],b=t1.members[0];a.x=STW/2-70;b.x=STW/2+70;a.face=1;b.face=-1;
   PROJ=[];FX=[];PT=[];GH=[];FLASH=0;GLITCH=0;CAM=STW/2-W/2;SHAKE=0;HITSTOP=0;FREEZE=null;PAUSE=false;SCR='fight';musicPlay(bgi);
@@ -484,15 +494,20 @@ function trySwap(f){
   T_.cur=idx;enter(T_,T_.members[idx]);fx('txt',f.x,f.y-96,{s:'CHANGE!',c:'#60ff80',life:40});sfx('chg');
   return true;
 }
-function trySpecial(f,opp){
+function trySpecial(f,opp,onlySup){
   const T_=f.team,inp=T_.inp,ch=f.ch,face=f.face;let want=null;
   if(inp.cmd){want=inp.cmd;inp.cmd=null;}
+  else if(T_.assist&&inp.h.g){
+    const b=['lp','lk','hp','hk'].find(x=>press(inp,x));
+    if(b){want={lp:'s1',lk:'s2',hp:'s3'}[b]||((T_.members[T_.leader]===f&&T_.gauge>=200)?'ls':'sup');inp.buf[b]=undefined;}
+  }
   else{
     const pp=press(inp,'lp')||press(inp,'hp'),kk=press(inp,'lk')||press(inp,'hk');
     if(pp){if(motion(inp,'db',face))want='sup';else if(motion(inp,'df',face))want='s1';else if(motion(inp,'dd',face))want='s3';}
     if(!want&&kk){if(motion(inp,'db',face))want='s2';else if(motion(inp,'df',face))want='ls';}
   }
   if(!want)return false;
+  if(onlySup&&want!=='sup'&&want!=='ls')return false;
   const m=ch.mv[want];
   if(want==='sup'&&T_.gauge<100)return false;
   if(want==='ls'&&(T_.members[T_.leader]!==f||T_.gauge<200))return false;
@@ -510,7 +525,7 @@ function tryNormal(f,fromLvl){
     const m=NORM[(air?'j':cr?'c':'')+b];
     if(fromLvl>0){const cm=f.mv;if(!(m.lvl>fromLvl||(m.lvl===1&&fromLvl===1&&m!==cm&&f.chainN<2)))continue;}
     const cn=fromLvl>0?f.chainN+1:0;
-    inp.buf[b]=undefined;startMove(f,m);f.chainN=cn;return true;
+    inp.buf[b]=undefined;startMove(f,m);f.chainN=cn;if(fromLvl>0&&!air)f.vx=f.face*1.3;return true;
   }
   return false;
 }
@@ -521,11 +536,36 @@ function updNeutral(f,opp){
   if(trySwap(f)||trySpecial(f,opp)||tryNormal(f,0))return;
   if(inp.h.g){f.st=inp.h.d?'crouch':'idle';f.vx=0;return;}
   const fw=f.face>0?inp.h.r:inp.h.l,bk=f.face>0?inp.h.l:inp.h.r;
+  if(fw&&!inp.h.d&&(dbl(inp,f.face>0?'r':'l')||inp.wantRun)){inp.wantRun=0;f.st='run';f.f=0;fx('dust',f.x,GROUND);return;}
+  if(bk&&!inp.h.d&&dbl(inp,f.face>0?'l':'r')){f.st='bstep';f.f=0;f.vx=-f.face*4.2;f.vy=-2.6;sfx('jump');return;}
   if(inp.h.u){doJump(f,fw?1:bk?-1:0);return;}
   if(inp.h.d){f.st='crouch';f.vx=0;}
   else if(fw){f.st='walk';f.vx=f.face*f.ch.spd;}
   else if(bk){f.st='walk';f.vx=-f.face*f.ch.spd*0.75;}
   else{f.st='idle';f.vx=0;}
+}
+function dbl(inp,k){const h=inp.hist,n=h.length;if(n<2)return false;const a=h[n-1],b=h[n-2];
+  if(a.k!==k||b.k!==k||a.t===inp.dashT||GF-a.t>3||a.t-b.t>(inp.gap>16?18:13))return false;inp.dashT=a.t;return true;}
+function updRun(f,opp){
+  const T_=f.team,inp=T_.inp;
+  if(G.state!=='fight'){toNeutral(f);f.vx=0;return;}
+  const v=f.vx;
+  if(trySwap(f)||trySpecial(f,opp))return;
+  if(tryNormal(f,0)){f.vx=v*0.55;return;}
+  const fw=f.face>0?inp.h.r:inp.h.l;
+  if(inp.h.u){doJump(f,1);f.vx=f.face*f.ch.spd*2.1;return;}
+  if(!fw||inp.h.g||inp.h.d){toNeutral(f);f.vx=0;return;}
+  f.vx=f.face*f.ch.spd*2.3;if(f.f%9===0)fx('dust',f.x-f.face*6,GROUND);
+}
+function autoCombo(f,opp){
+  const m=f.mv,inp=f.team.inp,T_=f.team;if(m.nocan)return false;
+  const nx={lp:'lk',clp:'lk',lk:'hp',clk:'hp',jlp:'jhk',jlk:'jhk'}[m.key];
+  if(nx){inp.buf.lp=undefined;startMove(f,NORM[nx]);f.chainN++;if(f.y>=GROUND)f.vx=f.face*1.3;return true;}
+  if(m.air)return false;
+  let want=null;
+  if(T_.gauge>=200&&T_.members[T_.leader]===f)want='ls';else if(T_.gauge>=100)want='sup';
+  else for(const ty of ['dash','spin','slide','uppercut','fireball','wave']){const k=['s1','s2','s3'].find(q=>f.ch.mv[q].ty===ty&&!(f.ch.mv[q].proj&&projCount(f)>0));if(k){want=k;break;}}
+  if(!want)return false;inp.buf.lp=undefined;inp.cmd=want;return trySpecial(f,opp);
 }
 function updAtk(f,opp){
   const m=f.mv,t=f.f,inp=f.team.inp;let moving=false;
@@ -533,6 +573,8 @@ function updAtk(f,opp){
   if(m.proj&&t===m.proj.f)spawnProj(f,m.proj,m);
   if(m.fn)m.fn(f,t,opp);
   if(m.abortAt&&t===m.abortAt&&!f.mvConnectHit){f.f=m.abortTo;}
+  if(f.team.assist&&f.mvConnectHit&&!m.sp&&!m.sup&&G.state==='fight'&&!inp.h.g&&press(inp,'lp')&&autoCombo(f,opp))return;
+  if(m.sp&&!m.sup&&f.mvConnectHit&&f.y>=GROUND&&G.state==='fight'&&trySpecial(f,opp,true))return;
   if(f.mvConnect&&!m.sp&&!m.sup&&!m.nocan&&G.state==='fight'){
     if(!m.air&&trySpecial(f,opp))return;
     if(tryNormal(f,m.lvl))return;
@@ -547,6 +589,7 @@ function updAtk(f,opp){
 function onLand(f){
   switch(f.st){
     case 'jump':setLand(f,3);break;
+    case 'bstep':setLand(f,5);break;
     case 'atk':setLand(f,f.mv.rise?(f.mv.landRec||12):4);break;
     case 'air':f.st=f.dead?'ko':'down';f.f=0;f.vx*=0.4;fx('dust',f.x,GROUND);break;
     case 'in':toNeutral(f);f.vx=0;fx('dust',f.x,GROUND);break;
@@ -558,6 +601,8 @@ function updFighter(f,opp){
     case 'idle':case 'walk':case 'crouch':updNeutral(f,opp);break;
     case 'jump':if(!f.airDone&&G.state==='fight'&&tryNormal(f,0))f.airDone=true;break;
     case 'atk':updAtk(f,opp);break;
+    case 'run':updRun(f,opp);break;
+    case 'bstep':break;
     case 'hit':case 'blk':f.vx*=0.84;if(--f.stun<=0)toNeutral(f);break;
     case 'land':f.vx*=0.6;if(f.f>=f.rec)toNeutral(f);break;
     case 'down':f.vx*=0.8;if(f.f>=38){f.st='getup';f.f=0;}break;
@@ -590,20 +635,22 @@ function applyHit(a,d,h,m,pr){
   if(G.state!=='fight'||d.dead||d.limit)return 0;
   if(d.st==='ko'||d.st==='down'||d.st==='getup'||d.st==='in'||d.st==='out')return 0;
   if(d.st==='atk'&&d.mv.inv&&d.f>=d.mv.inv[0]&&d.f<=d.mv.inv[1])return 0;
+  if(d.st==='bstep'&&d.f<10)return 0;
   const T_=d.team,inp=T_.inp,dir=pr?sgn(pr.vx):(a.x<=d.x?1:-1);
   const grounded=d.y>=GROUND&&d.st!=='air',back=(dir>0?inp.h.r:inp.h.l)||inp.h.g,ty=h.ty||'mid';
   const canB=grounded&&back&&(d.st==='idle'||d.st==='walk'||d.st==='crouch'||d.st==='blk');
-  const blk=canB&&(ty==='mid'||(ty==='low'&&inp.h.d)||(ty==='high'&&!inp.h.d));
+  const fwdHeld=dir>0?inp.h.l:inp.h.r,ag=T_.assist&&grounded&&Math.random()<0.8&&(d.st==='idle'||d.st==='crouch'||d.st==='blk'||(d.st==='walk'&&!fwdHeld));
+  const blk=ag||(canB&&(ty==='mid'||(ty==='low'&&inp.h.d)||(ty==='high'&&!inp.h.d)));
   const hb=hurt(d),px=pr?pr.x:d.x-dir*8,py=pr?pr.y:clamp(a.y+(h.box[1]+h.box[3]/2)*a.ch.sc,hb[1]+4,hb[1]+hb[3]-4);
   const atWall=d.x<=CAM+16||d.x>=CAM+W-16;
   if(blk){
-    d.st='blk';d.stun=h.bs||12;d.cblk=!!inp.h.d;d.vx=dir*(h.push||2)*1.2;d.f=0;
+    d.st='blk';d.stun=h.bs||12;d.cblk=!!inp.h.d||(ag&&ty==='low');d.vx=dir*(h.push||2)*1.2;d.f=0;
     if(m.sp||m.sup)d.hp=Math.max(1,d.hp-Math.round(h.dmg*0.1*DMG_SCALE));
     if(!pr){a.mvConnect=true;a.mvBlocked=true;if(atWall&&a.y>=GROUND&&!m.vel)a.kb=-dir*2.4;}
     addGauge(a.team,3);addGauge(T_,2);fx('blk',px,py);sfx('blk');HITSTOP=4;return 1;
   }
   const scale=Math.max(0.3,1-0.1*d.comboTaken);
-  const dmg=Math.max(1,Math.round(h.dmg*a.ch.pow*scale*DMG_SCALE));
+  const dmg=Math.max(1,Math.round(h.dmg*a.ch.pow*scale*DMG_SCALE*(T_.assist&&a.team.ai?0.75:1)));
   d.hp-=dmg;d.comboTaken++;d.flash=4;
   a.team.combo=d.comboTaken;a.team.comboT=80;
   const wasAir=!grounded;
@@ -663,7 +710,7 @@ function endMatch(w,reason){G.state='end';G.t=0;G.winner=w;G.reason=reason;PROJ=
 
 function stepFight(){
   const A=G.teams[0],B=G.teams[1];
-  G.t++;
+  G.t++;GF++;
   if(G.state==='intro'){if(G.t>=80){G.state='fight';G.t=0;sfx('bell');}}
   else if(G.state==='fight'){if(--G.timer<=0){G.timer=0;G.state='timeup';G.t=0;sfx('bell');}}
   let a=cur(A),b=cur(B);
@@ -693,14 +740,17 @@ function updFX(){for(const e of FX)e.t++;FX=FX.filter(e=>e.t<e.life);if(SHAKE>0)
    ====================================================================== */
 function aiThink(T_,f,opp){
   const A=T_.ai,inp=T_.inp,lv=A.lvl,ch=f.ch;
-  inp.h.l=inp.h.r=inp.h.u=inp.h.d=0;inp.cmd=null;
+  inp.h.l=inp.h.r=inp.h.u=inp.h.d=0;inp.cmd=null;inp.wantRun=0;const agg=A.agg===undefined?0.5:A.agg;
   const dx=opp.x-f.x,dist=Math.abs(dx),fw=dx>=0?'r':'l',bk=dx>=0?'l':'r';
-  const hold=k=>{inp.h[k]=1;},tap=b=>{inp.buf[b]=FR;};
-  const neutral=f.st==='idle'||f.st==='walk'||f.st==='crouch',isLead=T_.members[T_.leader]===f;
+  const hold=k=>{inp.h[k]=1;},tap=b=>{inp.buf[b]=GF;};
+  const neutral=f.st==='idle'||f.st==='walk'||f.st==='crouch'||f.st==='run',isLead=T_.members[T_.leader]===f;
   if(A.demo&&f.st!=='atk'&&f.st!=='jump'){demoDrive(T_,f,opp);return;}
   const keyOf=types=>{const ks=['s1','s2','s3'].filter(k=>types.includes(ch.mv[k].ty)&&!(ch.mv[k].proj&&projCount(f)>0));return ks.length?ks[ri(ks.length)]:null;};
   if(f.st==='atk'){
     const m=f.mv;
+    if(m.sp&&!m.sup&&f.mvConnectHit&&f.y>=GROUND&&A.scId!==f.mvId){A.scId=f.mvId;
+      if(T_.gauge>=100&&Math.random()<lv*agg*1.1){inp.cmd=(isLead&&T_.gauge>=200)?'ls':'sup';return;}}
+    if(f.mvBlocked&&!f.mvConnectHit&&m.lvl===1&&A.bsId!==f.mvId){A.bsId=f.mvId;if(Math.random()<agg*0.6)tap(Math.random()<0.5?'lk':'hp');}
     if(f.mvConnectHit&&A.cid!==f.mvId){A.cid=f.mvId;A.q=null;
       if(Math.random()<0.2+0.75*lv&&!m.sp&&!m.sup){
         if(m.air){if(m.lvl===1)A.q='hk';}
@@ -722,6 +772,7 @@ function aiThink(T_,f,opp){
   }
   if(!neutral){A.plan=null;A.t=0;return;}
   A.q=null;
+  if(f.st==='run'){if(dist<46){tap(['lp','hp','lk','hk'][ri(4)]);A.plan='wait';A.t=6;}else hold(fw);return;}
   if(f.hp<f.ch.hp*0.3&&changeOK(T_)&&Math.random()<0.02){tap('t1');return;}
   const oatk=opp.st==='atk'?opp.mv:null;
   let pth=null;for(const p of PROJ){if(p.team!==T_&&Math.abs(p.x-f.x)<60&&sgn(p.vx)===sgn(f.x-p.x))pth=p;}
@@ -745,10 +796,11 @@ function aiThink(T_,f,opp){
     else if(dist>54)p=r<0.35?'approach':r<0.55?'rush':r<0.7?'jumpin':r<0.78?'zone':r<0.86?'retreat':'wait';
     else p=r<0.62?'poke':r<0.74?'low':r<0.82?'retreat':r<0.88?'jumpin':'wait';
     if(Math.random()>0.45+0.55*lv)p='wait';
-    A.plan=p;A.t=10+ri(24);
+    if((p==='wait'||p==='retreat')&&Math.random()<agg*0.55)p=dist>54?'approach':'poke';
+    A.plan=p;A.t=Math.max(4,Math.round((10+ri(24))*(1.25-agg*0.7)));
   }
   switch(A.plan){
-    case 'approach':hold(fw);break;
+    case 'approach':hold(fw);if(dist>100&&agg>0.7&&Math.random()<0.08)inp.wantRun=1;break;
     case 'retreat':hold(bk);break;
     case 'zone':{const k=keyOf(['fireball','wave']);if(k)inp.cmd=k;else hold(fw);A.plan='wait';A.t=18+ri(20);break;}
     case 'rush':{const k=keyOf(['dash','slide','spin','teleport']);if(k)inp.cmd=k;else hold(fw);A.plan='wait';A.t=14;break;}
@@ -893,6 +945,8 @@ function getPose(f){
   if((f.st==='idle'||f.st==='crouch')&&G&&G.state==='fight'&&f.team.inp.h.g)return f.st==='crouch'?P.cblk:P.blk;
   switch(f.st){
     case 'idle':{const b=Math.sin(FR*0.1+f.ph),p=P.idle.slice();p[0]+=b;p[2]+=b*3;p[4]+=b*3;p[6]+=b*2;p[8]+=b;return p;}
+    case 'run':{const p=lerpP(P.walkA,P.walkB,(Math.sin(FR*0.5+f.ph)+1)/2);p[0]+=20;p[1]-=25;p[3]-=15;p[5]+=8;return p;}
+    case 'bstep':return lerpP(P.pre,P.jump,0.55);
     case 'walk':return lerpP(P.walkA,P.walkB,(Math.sin(FR*0.22*(f.ch.spd/1.5)+f.ph)+1)/2);
     case 'crouch':return P.crouch;
     case 'jump':case 'in':case 'out':return P.jump;
@@ -984,7 +1038,7 @@ function drawHUD(){
   // 計時器
   rect(144,6,32,24,'#c0d8ff');rect(145,7,30,22,'#1038a0');rect(146,8,28,2,'#3060d0');
   const sec=Math.ceil(G.timer/60);textO(String(sec).padStart(2,'0'),160,9,sec<=10&&(FR&16)?'#ff5040':'#ffffff',16,'center',FONT2,'#081850');
-  textO((G.label?G.label+'　':'')+THEMES[G.bgi].n,160,32,'#c0d0ff',6,'center');
+  textO((G.label?G.label+'　':'')+THEMES[G.bgi].n+(SCR==='fight'&&(G.teams.some(t=>t.ai)||DIFF===0)?'　'+DIFFS[DIFF].n:''),160,32,'#c0d0ff',6,'center');
 }
 function leaderTag(x,y){rect(x,y,8,8,'#101018');rect(x+1,y+1,6,6,'#ffd040');rect(x+2,y+2,1,4,'#101018');rect(x+2,y+5,3,1,'#101018');}
 function bigMsg(s,c,size,y){textO(s,160,y===undefined?84:y,c,size||26,'center',FONT2,'#000000');}
@@ -1022,7 +1076,9 @@ function drawPause(){
     moveLines(f.ch).forEach((l,i)=>text(l,x,50+i*13,i===4?(T_.members[T_.leader]===f?'#ffd040':'#606878'):'#ffffff',7,'left'));});
   text('指令方向以角色面向右為準；面向左時左右相反。',160,126,'#a0b0d0',7,'center');
   text('防禦：按住防禦鍵（1P '+kn(0,'g')+'／2P '+kn(1,'g')+'）或「後」　下段要蹲防　跳躍攻擊要站防',160,140,'#a0b0d0',7,'center');
-  text('連段：輕攻擊 → 重攻擊 → 必殺技／超必殺　　蹲重拳命中後按住上可跳起空中追打',160,154,'#a0b0d0',7,'center');
+  text('連段：輕 → 重 → 必殺技 → 超必殺（必殺技命中可再接超必殺）　蹲重拳命中後按住上可空中追打',160,152,'#a0b0d0',6.5,'center');
+  text('移動：快速按兩下「前」衝刺，按兩下「後」後撤步（短暫無敵）',160,164,'#a0b0d0',6.5,'center');
+  if(G.teams.some(t=>t.assist))text('簡單模式：按住防禦鍵＋輕拳／輕腳／重拳＝必殺技 1／2／3，＋重腳＝超必殺　連打輕拳自動連段',160,176,'#60ff80',6.5,'center');
   textO('Esc 繼續　　Backspace 回標題',160,190,'#ffffff',9,'center');
 }
 
@@ -1153,7 +1209,7 @@ function demoDrive(T_,f,opp){
   const k=DEMO_SEQ[D.k%DEMO_SEQ.length],m=k==='lp'?null:k==='chp'?null:f.ch.mv[k],dist=m?DEMO_DIST[m.ty]:28;
   if(D.w===34){f.x=STW/2-dist/2;opp.x=STW/2+dist/2;f.face=1;opp.face=-1;opp.hp=opp.hpLag=opp.ch.hp;fx('dust',f.x,GROUND);fx('dust',opp.x,GROUND);
     D.cur=k==='lp'?'輕攻擊起手連段':k==='chp'?'挑空 → 空中追打':(k==='sup'?'超必殺：':k==='ls'?'隊長專屬必殺：':'必殺技：')+m.name;return;}
-  if(D.w>=40){if(k==='lp')inp.buf.lp=FR;else if(k==='chp'){inp.h.d=1;inp.buf.hp=FR;}else inp.cmd=k;D.k++;DEMO.k=D.k;D.w=0;}
+  if(D.w>=40){if(k==='lp')inp.buf.lp=GF;else if(k==='chp'){inp.h.d=1;inp.buf.hp=GF;}else inp.cmd=k;D.k++;DEMO.k=D.k;D.w=0;}
 }
 function openDemo(ci){
   const n=UNLOCK?15:12;DEMO.ci=((ci%n)+n)%n;const a=CH[DEMO.ci],d=CH[(DEMO.ci+6)%12];
@@ -1196,6 +1252,7 @@ function tickTitle(){TT++;
   for(const e of uiq){
     if(e.a==='u'){MENU=(MENU+MENUS.length-1)%MENUS.length;sfx('ui');}
     if(e.a==='d'){MENU=(MENU+1)%MENUS.length;sfx('ui');}
+    if(e.a==='l'||e.a==='r'){DIFF=(DIFF+(e.a==='r'?1:2))%3;saveDiff();sfx('ui');}
     if(uiConfirm(e)){sfx('ok');if(MENU===6){SCR='how';}else if(MENU===5)openKeys();else if(MENU===4)openDemo(DEMO.ci);else if(MENU===3)openStage('gallery');else startSelect(['arcade','vs','cpu'][MENU]);return;}
   }
 }
@@ -1206,9 +1263,11 @@ function renderTitle(){
   drawBody(CH[0],pa,70,GROUND,1,1);drawBody(CH[11],pa,250,GROUND,-1,1.02);
   textO('火柴鬥魂',160,22,'#ffe040',34,'center',FONT,'#801000');
   textO('STICK SPIRIT  3 on 3',160,62,'#ffffff',12,'center',FONT2);
-  MENUS.forEach((m,i)=>{const sel=i===MENU;textO((sel?'▶ ':'　')+m,160,76+i*13,sel?'#ffe040':'#c0c8e0',sel?10:9,'center');});
-  textO(UNLOCK?'★ 已解鎖：小頭目 牙・幽 ／ 大頭目 零':'破關街機模式可解鎖 2 名小頭目與大頭目',160,170,UNLOCK?'#ffd040':'#8898c0',7,'center');
-  text(kn(0,'u')+'／'+kn(0,'d')+' 選擇　　'+kn(0,'lp')+' 或 Enter 確認',160,210,'#a0b0d0',7,'center');
+  MENUS.forEach((m,i)=>{const sel=i===MENU;textO((sel?'▶ ':'　')+m,160,79+i*11,sel?'#ffe040':'#c0c8e0',sel?9.5:8.5,'center');});
+  const dd=DIFFS[DIFF];rect(70,160,180,26,'rgba(0,0,16,0.6)');
+  textO('難度　◀ '+dd.n+' ▶',160,162,dd.c,10,'center');text(dd.d,160,176,'#c0d0ff',6,'center');
+  textO(UNLOCK?'★ 已解鎖：小頭目 牙・幽 ／ 大頭目 零':'破關街機模式可解鎖 2 名小頭目與大頭目',160,192,UNLOCK?'#ffd040':'#8898c0',7,'center');
+  text(kn(0,'u')+'／'+kn(0,'d')+' 選擇　'+kn(0,'l')+'／'+kn(0,'r')+' 調整難度　'+kn(0,'lp')+' 或 Enter 確認',160,210,'#a0b0d0',7,'center');
 }
 function tickHow(){for(const e of uiq){if(uiConfirm(e)||e.a==='esc'||e.a==='lk'){sfx('ui');SCR='title';return;}}}
 function renderHow(){
@@ -1220,13 +1279,15 @@ function renderHow(){
     ['#ffffff','必殺技：↓→＋拳 ／ ↓←＋腳 ／ ↓↓＋拳（依序輕點方向再按攻擊）'],
     ['#ffffff','超必殺：↓←＋拳，消耗 1 條氣。'],
     ['#ffd040','隊長專屬必殺：↓→＋腳，只有隊長能用，消耗 2 條氣。'],
-    ['#ffffff','連段：輕 → 重 → 必殺／超必殺。蹲重拳命中後按住上可跳起空中追打。'],
+    ['#ffffff','連段：輕 → 重 → 必殺 → 超必殺（必殺技命中後可再輸入超必殺取消）。蹲重拳命中後按住上可空中追打。'],
+    ['#ffffff','移動：快速按兩下「前」衝刺（按住持續奔跑），按兩下「後」後撤步（起跳瞬間無敵）。'],
+    ['#60ff80','簡單難度：防禦鍵＋輕拳／輕腳／重拳＝必殺技，＋重腳＝超必殺；連打輕拳自動連段；站著不動會自動防禦。'],
     ['#80c0ff','連擊達 '+COMBO_MAX+' 下或空中追打 '+JUG_MAX+' 次後，對手會進入無敵（COMBO LIMIT）。'],
     ['#60ff80','換人：畫面下方亮起 CHANGE OK 時可換人，每場比賽每隊限用 1 次。'],
     ['#60ff80','場下角色不回血；擊倒對手一人時，場上角色回復 1/4 體力。'],
     ['#ffffff','每回合 60 秒。時間到先比剩餘人數，相同再比剩餘體力總和。'],
     ['#a0b0d0','Esc 暫停並查看招式表　　M 靜音']];
-  L_.forEach((l,i)=>text(l[1],10,24+i*13,l[0],6.5,'left'));
+  L_.forEach((l,i)=>text(l[1],8,22+i*12,l[0],6,'left'));
   textO(kn(0,'lp')+'／Enter 返回',160,211,'#ffffff',8,'center');
 }
 function mkSel(cpu){return {cur:cpu?4:0,picks:[],leader:-1,ld:0,done:false,cpu};}
@@ -1334,7 +1395,7 @@ function renderEnding(){
 function renderSelect(){
   rect(0,0,W,H,'#0a0e28');for(let y=0;y<H;y+=4)rect(0,y,W,1,'#0e1434');
   const modeN={arcade:'街機模式',vs:'雙人對戰',cpu:'自由對戰'}[SEL.mode];
-  textO('選擇隊伍 — '+modeN,160,4,'#ffe040',10,'center');
+  textO('選擇隊伍 — '+modeN+(SEL.mode==='vs'&&DIFF!==0?'':'（'+DIFFS[DIFF].n+'）'),160,4,'#ffe040',10,'center');
   const gx=75,gy=22,cw=34,chh=32;
   for(let i=0;i<15;i++){const cx=gx+(i%5)*cw,cy=gy+((i/5)|0)*chh,ch=CH[i],ok=unlocked(i);
     rect(cx,cy,cw-2,chh-2,ok?(ch.sub?'#2a1840':ch.boss?'#3a0c14':'#1a2050'):'#14141c');rect(cx,cy,cw-2,1,'#3a4480');
@@ -1409,7 +1470,7 @@ function focusGame(){initAudio();try{if(AC&&AC.state==='suspended')AC.resume();}
 cover.addEventListener('click',focusGame);cv.addEventListener('click',focusGame);
 window.addEventListener('keydown',()=>{if(cover.style.display!=='none')focusGame();},{once:true});
 if(typeof window.__TEST__==='undefined'){requestAnimationFrame(loop);setInterval(musicTick,30);}
-else window.__API__={tick,render,startMatch,CH,BOSSF,KB,get G(){return G;},get SCR(){return SCR;},set SCR(v){SCR=v;},uiq,get FR(){return FR;},get PROJ(){return PROJ;},get FREEZE(){return FREEZE;},get STG(){return STG;},openDemo,STYLES,get CHFX(){return CHFX;},get BIND(){return BIND;},setBind,openKeys,get KEYMAP(){return KEYMAP;},openStage,NMAP,TRACKS,schedStep,cur,changeOK};
+else window.__API__={tick,render,startMatch,CH,BOSSF,KB,get G(){return G;},get SCR(){return SCR;},set SCR(v){SCR=v;},uiq,get FR(){return FR;},get PROJ(){return PROJ;},get FREEZE(){return FREEZE;},get STG(){return STG;},get GF(){return GF;},get DIFF(){return DIFF;},set DIFF(v){DIFF=v;},openDemo,STYLES,get CHFX(){return CHFX;},get BIND(){return BIND;},setBind,openKeys,get KEYMAP(){return KEYMAP;},openStage,NMAP,TRACKS,schedStep,cur,changeOK};
 </script>
 </body>
 </html>
