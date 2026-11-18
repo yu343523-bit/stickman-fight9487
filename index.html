@@ -680,7 +680,7 @@ const SUBF=[12,13].map(i=>Object.assign({},CH[i],{hp:Math.round(CH[i].hp*1.15),p
 /* ======================================================================
    按鍵設定（可自訂，不可重複；選到已使用的按鍵時兩者互換）
    ====================================================================== */
-const ACTS=[['u','上／跳躍'],['d','下／蹲下'],['l','左'],['r','右'],['lp','輕拳'],['lk','輕腳'],['hp','重拳'],['hk','重腳'],['g','防禦'],['t1','換人 1'],['t2','換人 2']];
+const ACTS=[['u','上／跳躍'],['d','下／蹲下'],['l','左'],['r','右'],['lp','輕拳'],['lk','輕腳'],['hp','重拳'],['hk','重腳'],['g','簡易必殺（簡單難度用）'],['t1','換人 1'],['t2','換人 2']];
 const DEF_BIND=[{u:'KeyW',d:'KeyS',l:'KeyA',r:'KeyD',lp:'KeyJ',lk:'KeyK',hp:'KeyU',hk:'KeyI',g:'KeyH',t1:'KeyL',t2:'KeyO'},
   {u:'ArrowUp',d:'ArrowDown',l:'ArrowLeft',r:'ArrowRight',lp:'Numpad1',lk:'Numpad2',hp:'Numpad4',hk:'Numpad5',g:'Numpad0',t1:'Numpad3',t2:'Numpad6'}];
 const LAPTOP_P2={u:'ArrowUp',d:'ArrowDown',l:'ArrowLeft',r:'ArrowRight',lp:'Semicolon',lk:'Quote',hp:'KeyP',hk:'BracketLeft',g:'Comma',t1:'Slash',t2:'Period'};
@@ -702,7 +702,7 @@ function setBind(p,a,code){
   for(let q=0;q<2;q++)for(const [b,nm] of ACTS){if(BIND[q][b]===code&&!(q===p&&b===a)){BIND[q][b]=old;msg='與 '+(q+1)+'P「'+nm+'」互換按鍵（'+keyName(code)+' ⇄ '+keyName(old)+'）';}}
   BIND[p][a]=code;buildKeymap();saveBind();for(const k of KB){k.h.l=k.h.r=k.h.u=k.h.d=k.h.g=0;}return msg;}
 function updateHint(){const el=document.getElementById('hint');if(!el)return;
-  const row=p=>'<b>'+(p+1)+'P</b> '+kn(p,'u')+' '+kn(p,'l')+' '+kn(p,'d')+' '+kn(p,'r')+' 移動・'+kn(p,'lp')+' 輕拳 '+kn(p,'lk')+' 輕腳 '+kn(p,'hp')+' 重拳 '+kn(p,'hk')+' 重腳・'+kn(p,'g')+' 防禦・'+kn(p,'t1')+' / '+kn(p,'t2')+' 換人';
+  const row=p=>'<b>'+(p+1)+'P</b> '+kn(p,'u')+' '+kn(p,'l')+' '+kn(p,'d')+' '+kn(p,'r')+' 移動・'+kn(p,'lp')+' 輕拳 '+kn(p,'lk')+' 輕腳 '+kn(p,'hp')+' 重拳 '+kn(p,'hk')+' 重腳・'+kn(p,'g')+' 簡易必殺・'+kn(p,'t1')+' / '+kn(p,'t2')+' 換人';
   el.innerHTML=row(0)+'　'+row(1)+'　<b>Esc</b> 暫停　<b>M</b> 靜音';}
 let KC={p:0,i:0,cap:false,msg:''};
 function openKeys(){KC={p:0,i:0,cap:false,msg:''};SCR='keys';}
@@ -868,13 +868,18 @@ function tryNormal(f,fromLvl){
   }
   return false;
 }
+function threat(f,opp){
+  const dist=Math.abs(opp.x-f.x);if(opp.st==='atk'&&dist<130)return true;
+  for(const p of PROJ)if(p.team!==f.team&&!p.trap&&Math.abs(p.x-f.x)<110&&sgn(p.vx)===sgn(f.x-p.x))return true;return false;}
 function updNeutral(f,opp){
   const T_=f.team,inp=T_.inp;
   if(Math.abs(opp.x-f.x)>1)f.face=opp.x>f.x?1:-1;
   if(G.state!=='fight'){if(G.state==='end'&&G.winner===T_.side){f.st='win';f.f=0;}else f.st='idle';f.vx=0;return;}
   if(trySwap(f)||trySpecial(f,opp)||tryNormal(f,0))return;
-  if(inp.h.g){f.st=inp.h.d?'crouch':'idle';f.vx=0;return;}
+  if(T_.assist&&inp.h.g){f.st=inp.h.d?'crouch':'idle';f.vx=0;return;}
   const fw=f.face>0?inp.h.r:inp.h.l,bk=f.face>0?inp.h.l:inp.h.r;
+  // 拳皇式防禦：按住「後」時，對手出招逼近就原地擺出防禦姿勢（蹲下＋後＝蹲防）
+  f.guardPose=false;if(bk&&threat(f,opp)){f.guardPose=true;f.st=inp.h.d?'crouch':'idle';f.vx=0;return;}
   if(fw&&!inp.h.d&&(dbl(inp,f.face>0?'r':'l')||inp.wantRun)){inp.wantRun=0;f.st='run';f.f=0;fx('dust',f.x,GROUND);return;}
   if(bk&&!inp.h.d&&dbl(inp,f.face>0?'l':'r')){f.st='bstep';f.f=0;f.vx=-f.face*4.2;f.vy=-2.6;sfx('jump');return;}
   if(inp.h.u){doJump(f,fw?1:bk?-1:0);return;}
@@ -893,7 +898,7 @@ function updRun(f,opp){
   if(tryNormal(f,0)){f.vx=v*0.55;return;}
   const fw=f.face>0?inp.h.r:inp.h.l;
   if(inp.h.u){doJump(f,1);f.vx=f.face*f.ch.spd*2.1;return;}
-  if(!fw||inp.h.g||inp.h.d){toNeutral(f);f.vx=0;return;}
+  if(!fw||inp.h.d){toNeutral(f);f.vx=0;return;}
   f.vx=f.face*f.ch.spd*2.3;if(f.f%9===0)fx('dust',f.x-f.face*6,GROUND);
 }
 function autoCombo(f,opp){
@@ -985,7 +990,7 @@ function applyHit(a,d,h,m,pr){
     fx('txt',d.x,d.y-96,{s:'反擊！',c:'#ffe040',life:30});sfx('blk');HITSTOP=8;return pr?1:0;}
   if(d.st==='atk'&&d.mvCatch)return 0;
   const T_=d.team,inp=T_.inp,dir=pr?sgn(pr.vx):(a.x<=d.x?1:-1);
-  const grounded=d.y>=GROUND&&d.st!=='air'&&d.st!=='jump'&&d.st!=='bstep',back=(dir>0?inp.h.r:inp.h.l)||inp.h.g,ty=h.ty||'mid';
+  const grounded=d.y>=GROUND&&d.st!=='air'&&d.st!=='jump'&&d.st!=='bstep',back=(dir>0?inp.h.r:inp.h.l),ty=h.ty||'mid';
   const canB=grounded&&back&&(d.st==='idle'||d.st==='walk'||d.st==='crouch'||d.st==='blk');
   const fwdHeld=dir>0?inp.h.l:inp.h.r,ag=T_.assist&&grounded&&Math.random()<0.8&&(d.st==='idle'||d.st==='crouch'||d.st==='blk'||(d.st==='walk'&&!fwdHeld));
   if(h.grab&&!grounded)return 0;
@@ -1316,7 +1321,7 @@ function weather(th,cam){
    繪製
    ====================================================================== */
 function getPose(f){
-  if((f.st==='idle'||f.st==='crouch')&&G&&G.state==='fight'&&f.team.inp.h.g)return f.st==='crouch'?P.cblk:P.blk;
+  if((f.st==='idle'||f.st==='crouch')&&G&&G.state==='fight'&&f.guardPose)return f.st==='crouch'?P.cblk:P.blk;
   switch(f.st){
     case 'idle':{const b=dsin(FR*0.1+f.ph),p=P.idle.slice();p[0]+=b;p[2]+=b*3;p[4]+=b*3;p[6]+=b*2;p[8]+=b;return p;}
     case 'run':{const p=lerpP(P.walkA,P.walkB,(dsin(FR*0.5+f.ph)+1)/2);p[0]+=20;p[1]-=25;p[3]-=15;p[5]+=8;return p;}
@@ -1509,10 +1514,10 @@ function drawPause(){
   G.teams.forEach((T_,s)=>{const f=cur(T_),x=s?168:12;textO((s?'2P ':'1P ')+f.ch.n+' '+f.ch.e,x,34,f.ch.c==='#282834'?'#ff2030':f.ch.c,9,'left');
     moveLines(f.ch).forEach((l,i)=>text(l,x,50+i*13,i===4?(T_.members[T_.leader]===f?'#ffd040':'#606878'):'#ffffff',7,'left'));});
   text('指令方向以角色面向右為準；面向左時左右相反。',160,126,'#a0b0d0',7,'center');
-  text('防禦：按住防禦鍵（1P '+kn(0,'g')+'／2P '+kn(1,'g')+'）或「後」　下段要蹲防　跳躍攻擊要站防',160,140,'#a0b0d0',7,'center');
+  text('防禦：按住「後」＝站防，「後下」＝蹲防　下段要蹲防　跳躍攻擊要站防',160,140,'#a0b0d0',7,'center');
   text('連段：輕 → 重 → 必殺技 → 超必殺（必殺技命中可再接超必殺）　蹲重拳命中後按住上可空中追打',160,152,'#a0b0d0',6.5,'center');
   text('移動：快速按兩下「前」衝刺，按兩下「後」後撤步（短暫無敵）',160,164,'#a0b0d0',6.5,'center');
-  if(G.teams.some(t=>t.assist))text('簡單模式：按住防禦鍵＋輕拳／輕腳／重拳＝必殺技 1／2／3，＋重腳＝超必殺　連打輕拳自動連段',160,176,'#60ff80',6.5,'center');
+  if(G.teams.some(t=>t.assist))text('簡單模式：按住簡易必殺鍵＋輕拳／輕腳／重拳＝必殺技 1／2／3，＋重腳＝超必殺　連打輕拳自動連段',160,176,'#60ff80',6.5,'center');
   textO('Esc 繼續　　Backspace 回標題',160,190,'#ffffff',9,'center');
 }
 
@@ -1777,15 +1782,15 @@ function tickHow(){for(const e of uiq){if(uiConfirm(e)||e.a==='esc'||e.a==='lk')
 function renderHow(){
   rect(0,0,W,H,'#0c1030');textO('操作說明',160,6,'#ffe040',12,'center');
   const kr=p=>'【'+(p+1)+'P】'+kn(p,'u')+' 跳　'+kn(p,'d')+' 蹲　'+kn(p,'l')+'／'+kn(p,'r')+' 移動　'+kn(p,'lp')+' 輕拳　'+kn(p,'lk')+' 輕腳　'+kn(p,'hp')+' 重拳　'+kn(p,'hk')+' 重腳';
-  const L_=[['#80d0ff',kr(0)],['#80d0ff','　　　'+kn(0,'g')+' 防禦　'+kn(0,'t1')+'／'+kn(0,'t2')+' 換人'],
-    ['#ffa0a0',kr(1)],['#ffa0a0','　　　'+kn(1,'g')+' 防禦　'+kn(1,'t1')+'／'+kn(1,'t2')+' 換人　　（按鍵可在「主設定 → 按鍵設定」更改）'],
-    ['#ffffff','防禦：按住防禦鍵或按住「後」。下段要蹲防，跳躍攻擊要站防。'],
+  const L_=[['#80d0ff',kr(0)],['#80d0ff','　　　'+kn(0,'g')+' 簡易必殺（簡單難度）　'+kn(0,'t1')+'／'+kn(0,'t2')+' 換人'],
+    ['#ffa0a0',kr(1)],['#ffa0a0','　　　'+kn(1,'g')+' 簡易必殺　'+kn(1,'t1')+'／'+kn(1,'t2')+' 換人　　（按鍵可在「主設定 → 按鍵設定」更改）'],
+    ['#ffffff','防禦：按住「後」站防，按住「後下」蹲防（同格鬥天王）。下段要蹲防，跳躍攻擊要站防。'],
     ['#ffffff','必殺技：↓→＋拳 ／ ↓←＋腳 ／ ↓↓＋拳（依序輕點方向再按攻擊）'],
     ['#ffffff','超必殺：↓←＋拳，消耗 1 條氣。　強化飛行道具：出招時同時按兩個拳（或兩個腳），消耗半條氣。'],
     ['#ffd040','隊長專屬必殺：↓→＋腳，只有隊長能用，消耗 2 條氣。'],
     ['#ffffff','連段：輕 → 重 → 必殺 → 超必殺（必殺技命中後可再輸入超必殺取消）。蹲重拳命中後按住上可空中追打。'],
     ['#ffffff','移動：快速按兩下「前」衝刺（按住持續奔跑），按兩下「後」後撤步（起跳瞬間無敵）。'],
-    ['#60ff80','簡單難度：防禦鍵＋輕拳／輕腳／重拳＝必殺技，＋重腳＝超必殺；連打輕拳自動連段；站著不動會自動防禦。'],
+    ['#60ff80','簡單難度：簡易必殺鍵＋輕拳／輕腳／重拳＝必殺技，＋重腳＝超必殺；連打輕拳自動連段；站著不動會自動防禦。'],
     ['#80c0ff','連擊達 '+COMBO_MAX+' 下或空中追打 '+JUG_MAX+' 次後，對手會進入無敵（COMBO LIMIT）。'],
     ['#60ff80','換人：畫面下方亮起 CHANGE OK 時可換人，每場比賽每隊限用 1 次。'],
     ['#60ff80','場下角色不回血；擊倒對手一人時，場上角色回復 1/4 體力。'],
